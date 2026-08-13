@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ps">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Call</title>
+
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial,sans-serif;
+    text-align:center;
+}
+
+h2{
+    margin:20px 0;
+}
+
+.box{
+    width:94%;
+    max-width:600px;
+    margin:auto;
+}
+
+video{
+    width:100%;
+    background:#222;
+    border-radius:15px;
+    margin:8px 0;
+}
+
+button{
+    border:0;
+    border-radius:10px;
+    padding:14px 20px;
+    margin:8px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+#start{
+    background:#20c997;
+    color:white;
+}
+
+#stop{
+    background:#dc3545;
+    color:white;
+}
+
+#status{
+    margin:15px;
+    color:#ccc;
+}
+</style>
+</head>
+
+<body>
+
+<h2>📹 Video Call</h2>
+
+<div class="box">
+
+    <video id="myVideo" autoplay muted playsinline></video>
+
+    <p id="status">Camera او Microphone فعالولو لپاره Start ووهئ.</p>
+
+    <button id="start">📷 Start Camera + 🎤 Mic</button>
+    <button id="stop">⛔ Stop</button>
+
+</div>
+
+<script>
+
+let stream = null;
+
+const video = document.getElementById("myVideo");
+const status = document.getElementById("status");
+
+document.getElementById("start").onclick = async function(){
+
+    try {
+
+        stream = await navigator.mediaDevices.getUserMedia({
+            video:true,
+            audio:true
+        });
+
+        video.srcObject = stream;
+
+        status.innerText =
+        "✅ Camera او Microphone فعال شول.";
+
+    } catch(error) {
+
+        status.innerText =
+        "❌ اجازه ورنه کړل شوه. Camera او Microphone ته Allow ورکړئ.";
+
+    }
+
+};
+
+document.getElementById("stop").onclick = function(){
+
+    if(stream){
+
+        stream.getTracks().forEach(track => track.stop());
+
+        video.srcObject = null;
+
+        status.innerText =
+        "⛔ Camera او Microphone بند شول.";
+
+    }
+
+};
+
+</script>
+
+</body>
+</html>
