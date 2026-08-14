@@ -1,0 +1,13 @@
+ {
+  "name": "video-call-2026",
+  "version": "1.0.0",
+  "description": "Simple WebRTC signaling server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+ }
