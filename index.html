@@ -1,58 +1,201 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const path = require("path");
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+<!DOCTYPE html>
+<html lang="ps">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One Way Video</title>
 
-app.use(express.static(path.join(__dirname, "public")));
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-io.on("connection", (socket) => {
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
 
-  socket.on("join-viewer", () => {
-    socket.join("video-room");
-    socket.to("video-room").emit("viewer-ready");
-  });
+    .header {
+      padding: 18px;
+      background: #1c1c1c;
+      font-size: 22px;
+      font-weight: bold;
+    }
 
-  socket.on("join-sharer", () => {
-    socket.join("video-room");
-    socket.to("video-room").emit("sharer-ready");
-  });
+    .video-box {
+      width: 100%;
+      height: 65vh;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-  socket.on("offer", (offer) => {
-    socket.to("video-room").emit("offer", offer);
-  });
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
 
-  socket.on("answer", (answer) => {
-    socket.to("video-room").emit("answer", answer);
-  });
+    .message {
+      padding: 15px;
+      color: #ccc;
+    }
 
-  socket.on("ice-candidate", (candidate) => {
-    socket.to("video-room").emit("ice-candidate", candidate);
-  });
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 15px;
+    }
 
-  socket.on("disconnect", () => {
-    socket.to("video-room").emit("peer-disconnected");
-  });
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 13px 20px;
+      font-size: 16px;
+      color: white;
+      background: #2563eb;
+    }
 
-});
+    button:active {
+      transform: scale(.96);
+    }
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+    .stop {
+      background: #dc2626;
+    }
 
-app.get("/view", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+    .status {
+      margin: 5px 15px 20px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #222;
+      color: #ddd;
+    }
+  </style>
+</head>
 
-app.get("/share", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+<body>
 
-const PORT = process.env.PORT || 3000;
+  <div class="header">
+    📹 One Way Video
+  </div>
 
-server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+  <div class="video-box">
+    <video id="remoteVideo" autoplay playsinline></video>
+  </div>
+
+  <div class="message">
+    بل کس چې کیمره شریکوي، ویډیو به دلته ښکاره شي.
+  </div>
+
+  <div class="buttons">
+    <button onclick="joinViewer()">👁️ ویډیو لیدل</button>
+    <button class="stop" onclick="stopVideo()">⛔ بندول</button>
+  </div>
+
+  <div class="status" id="status">
+    حالت: وصل کېدو ته تیار
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script>
+    const socket = io();
+
+    const remoteVideo = document.getElementById("remoteVideo");
+    const status = document.getElementById("status");
+
+    let peerConnection;
+
+    const config = {
+      iceServers: [
+        {
+          urls: "stun:stun.l.google.com:19302"
+        }
+      ]
+    };
+
+    function joinViewer() {
+      status.innerText = "حالت: د ویډیو انتظار...";
+
+      socket.emit("join-viewer");
+
+      peerConnection = new RTCPeerConnection(config);
+
+      peerConnection.ontrack = (event) => {
+        remoteVideo.srcObject = event.streams[0];
+        status.innerText = "حالت: ویډیو وصل شوه ✅";
+      };
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit("ice-candidate", event.candidate);
+        }
+      };
+    }
+
+    socket.on("offer", async (offer) => {
+      if (!peerConnection) {
+        peerConnection = new RTCPeerConnection(config);
+
+        peerConnection.ontrack = (event) => {
+          remoteVideo.srcObject = event.streams[0];
+          status.innerText = "حالت: ویډیو وصل شوه ✅";
+        };
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit("ice-candidate", event.candidate);
+          }
+        };
+      }
+
+      await peerConnection.setRemoteDescription(offer);
+
+      const answer = await peerConnection.createAnswer();
+
+      await peerConnection.setLocalDescription(answer);
+
+      socket.emit("answer", answer);
+    });
+
+    socket.on("ice-candidate", async (candidate) => {
+      try {
+        if (peerConnection) {
+          await peerConnection.addIceCandidate(candidate);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    socket.on("sharer-ready", () => {
+      status.innerText = "حالت: شریک کوونکی وصل شو...";
+    });
+
+    socket.on("peer-disconnected", () => {
+      remoteVideo.srcObject = null;
+      status.innerText = "حالت: بل کس له ویډیو ووت.";
+    });
+
+    function stopVideo() {
+      if (peerConnection) {
+        peerConnection.close();
+       = null;
+      }
+
+      remoteVideo.srcObject = null;
+      status.innerText = "حالت: ویډیو بنده شوه.";
+    }
+  </script>
+
+</body>
+    </h
