@@ -5,49 +5,55 @@ const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server);
 
-const io = new Server(server, {
-  cors: {
-    origin: "*"
-  }
-});
-
-app.use(express.static(path.join(__dirname)));
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+app.use(express.static(path.join(__dirname, "public")));
 
 io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
-  socket.on("join-room", (room) => {
-    socket.join(room);
-    socket.to(room).emit("user-joined", socket.id);
+  socket.on("join-viewer", () => {
+    socket.join("video-room");
+    socket.to("video-room").emit("viewer-ready");
   });
 
-  socket.on("offer", (data) => {
-    socket.to(data.room).emit("offer", data.offer);
+  socket.on("join-sharer", () => {
+    socket.join("video-room");
+    socket.to("video-room").emit("sharer-ready");
   });
 
-  socket.on("answer", (data) => {
-    socket.to(data.room).emit("answer", data.answer);
+  socket.on("offer", (offer) => {
+    socket.to("video-room").emit("offer", offer);
   });
 
-  socket.on("ice-candidate", (data) => {
-    socket.to(data.room).emit(
-      "ice-candidate",
-      data.candidate
-    );
+  socket.on("answer", (answer) => {
+    socket.to("video-room").emit("answer", answer);
+  });
+
+  socket.on("ice-candidate", (candidate) => {
+    socket.to("video-room").emit("ice-candidate", candidate);
   });
 
   socket.on("disconnect", () => {
-    socket.broadcast.emit("user-left");
+    socket.to("video-room").emit("peer-disconnected");
+    console.log("User disconnected:", socket.id);
   });
-
 });
 
-const PORT = process.env.PORT || 10000;
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+app.get("/view", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/share", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
