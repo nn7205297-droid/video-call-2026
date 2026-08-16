@@ -7,9 +7,21 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, "public")));
+// index.html د همدې اصلي فولډر څخه وړاندې کوي
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/view", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/share", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
 io.on("connection", (socket) => {
+
   console.log("User connected:", socket.id);
 
   socket.on("join-viewer", () => {
@@ -38,18 +50,7 @@ io.on("connection", (socket) => {
     socket.to("video-room").emit("peer-disconnected");
     console.log("User disconnected:", socket.id);
   });
-});
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.get("/view", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.get("/share", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
