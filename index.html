@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="ps">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>One Way Video</title>
+  <title>📹 One Way Video</title>
 
   <style>
     * {
@@ -13,96 +12,117 @@
 
     body {
       margin: 0;
+      font-family: Arial, sans-serif;
       background: #111;
       color: white;
-      font-family: Arial, sans-serif;
       text-align: center;
     }
 
-    .header {
-      padding: 18px;
-      background: #1c1c1c;
-      font-size: 22px;
-      font-weight: bold;
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
     }
 
-    .video-box {
+    h1 {
+      margin-top: 20px;
+      font-size: 28px;
+    }
+
+    .info {
+      color: #bbb;
+      margin-bottom: 20px;
+    }
+
+    input {
       width: 100%;
-      height: 65vh;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      margin-bottom: 12px;
+      font-size: 16px;
+      text-align: center;
+    }
+
+    button {
+      padding: 13px 18px;
+      margin: 5px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .join {
+      background: #2196f3;
+      color: white;
+    }
+
+    .watch {
+      background: #4caf50;
+      color: white;
+    }
+
+    .stop {
+      background: #f44336;
+      color: white;
     }
 
     video {
       width: 100%;
-      height: 100%;
-      object-fit: contain;
+      margin-top: 20px;
+      border-radius: 15px;
       background: #000;
+      min-height: 250px;
     }
 
-    .message {
-      padding: 15px;
-      color: #ccc;
-    }
-
-    .buttons {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      padding: 15px;
-    }
-
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 13px 20px;
-      font-size: 16px;
-      color: white;
-      background: #2563eb;
-    }
-
-    button:active {
-      transform: scale(.96);
-    }
-
-    .stop {
-      background: #dc2626;
-    }
-
-    .status {
-      margin: 5px 15px 20px;
+    #status {
+      margin-top: 20px;
       padding: 12px;
-      border-radius: 10px;
       background: #222;
-      color: #ddd;
+      border-radius: 10px;
+      color: #00e676;
     }
   </style>
 </head>
 
 <body>
 
-  <div class="header">
-    📹 One Way Video
-  </div>
+  <div class="container">
 
-  <div class="video-box">
-    <video id="remoteVideo" autoplay playsinline></video>
-  </div>
+    <h1>📹 One Way Video</h1>
 
-  <div class="message">
-    بل کس چې کیمره شریکوي، ویډیو به دلته ښکاره شي.
-  </div>
+    <p class="info">
+      بل کس چې کیمره شریکوي، ویډیو به دلته ښکاره شي.
+    </p>
 
-  <div class="buttons">
-    <button onclick="joinViewer()">👁️ ویډیو لیدل</button>
-    <button class="stop" onclick="stopVideo()">⛔ بندول</button>
-  </div>
+    <input
+      id="roomId"
+      type="text"
+      placeholder="Room ID ولیکه"
+    >
 
-  <div class="status" id="status">
-    حالت: وصل کېدو ته تیار
+    <br>
+
+    <button class="join" onclick="joinRoom()">
+      🔗 Room ته ننوتل
+    </button>
+
+    <button class="watch" onclick="startWatching()">
+      👁️ ویډیو لیدل
+    </button>
+
+    <button class="stop" onclick="stopVideo()">
+      ⛔ بندول
+    </button>
+
+    <video id="remoteVideo" autoplay playsinline controls></video>
+
+    <div id="status">
+      حالت: وصل کېدو ته تیار
+    </div>
+
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -110,12 +130,13 @@
   <script>
     const socket = io();
 
+    let roomId = "";
+    let peerConnection = null;
+
     const remoteVideo = document.getElementById("remoteVideo");
-    const status = document.getElementById("status");
+    const statusText = document.getElementById("status");
 
-    let peerConnection;
-
-    const config = {
+    const configuration = {
       iceServers: [
         {
           urls: "stun:stun.l.google.com:19302"
@@ -123,79 +144,138 @@
       ]
     };
 
-    function joinViewer() {
-      status.innerText = "حالت: د ویډیو انتظار...";
+    function setStatus(text) {
+      statusText.textContent = "حالت: " + text;
+    }
 
-      socket.emit("join-viewer");
+    function joinRoom() {
+      roomId = document.getElementById("roomId").value.trim();
 
-      peerConnection = new RTCPeerConnection(config);
+      if (!roomId) {
+        alert("Room ID ولیکه");
+        return;
+      }
+
+      socket.emit("join-room", roomId);
+
+      setStatus("Room ته داخل شو");
+    }
+
+    async function startWatching() {
+      if (!roomId) {
+        alert("لومړی Room ID ولیکه او Room ته داخل شه");
+        return;
+      }
+
+      setStatus("ویډیو ته انتظار...");
+    }
+
+    socket.on("user-joined", async () => {
+      setStatus("بل موبایل وصل شو");
+    });
+
+    socket.on("signal", async ({ from, data }) => {
+      console.log("Signal received", data);
+
+      if (!peerConnection) {
+        createPeerConnection();
+      }
+
+      if (data.type === "offer") {
+        await peerConnection.setRemoteDescription(
+          new RTCSessionDescription(data)
+        );
+
+        const answer = await peerConnection.createAnswer();
+
+        await peerConnection.setLocalDescription(answer);
+
+        socket.emit("signal", {
+          roomId: roomId,
+          data: answer
+        });
+      }
+
+      if (data.type === "answer") {
+        await peerConnection.setRemoteDescription(
+          new RTCSessionDescription(data)
+        );
+      }
+
+      if (data.candidate) {
+        try {
+          await peerConnection.addIceCandidate(
+            new RTCIceCandidate(data.candidate)
+          );
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    });
+
+    function createPeerConnection() {
+
+      peerConnection = new RTCPeerConnection(configuration);
 
       peerConnection.ontrack = (event) => {
         remoteVideo.srcObject = event.streams[0];
-        status.innerText = "حالت: ویډیو وصل شوه ✅";
+        setStatus("ویډیو وصل شوه");
       };
 
       peerConnection.onicecandidate = (event) => {
+
         if (event.candidate) {
-          socket.emit("ice-candidate", event.candidate);
+
+          socket.emit("signal", {
+            roomId: roomId,
+            data: {
+              candidate: event.candidate
+            }
+          });
+
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+
+        console.log(
+          "Connection:",
+          peerConnection.connectionState
+        );
+
+        if (
+          peerConnection.connectionState === "connected"
+        ) {
+          setStatus("وصل شو");
+        }
+
+        if (
+          peerConnection.connectionState === "disconnected"
+        ) {
+          setStatus("اړیکه پرې شوه");
         }
       };
     }
 
-    socket.on("offer", async (offer) => {
-      if (!peerConnection) {
-        peerConnection = new RTCPeerConnection(config);
-
-        peerConnection.ontrack = (event) => {
-          remoteVideo.srcObject = event.streams[0];
-          status.innerText = "حالت: ویډیو وصل شوه ✅";
-        };
-
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            socket.emit("ice-candidate", event.candidate);
-          }
-        };
-      }
-
-      await peerConnection.setRemoteDescription(offer);
-
-      const answer = await peerConnection.createAnswer();
-
-      await peerConnection.setLocalDescription(answer);
-
-      socket.emit("answer", answer);
-    });
-
-    socket.on("ice-candidate", async (candidate) => {
-      try {
-        if (peerConnection) {
-          await peerConnection.addIceCandidate(candidate);
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    });
-
-    socket.on("sharer-ready", () => {
-      status.innerText = "حالت: شریک کوونکی وصل شو...";
-    });
-
-    socket.on("peer-disconnected", () => {
-      remoteVideo.srcObject = null;
-      status.innerText = "حالت: بل کس له ویډیو ووت.";
-    });
-
     function stopVideo() {
+
+      if (remoteVideo.srcObject) {
+
+        remoteVideo.srcObject
+          .getTracks()
+          .forEach(track => track.stop());
+
+        remoteVideo.srcObject = null;
+      }
+
       if (peerConnection) {
         peerConnection.close();
-       = null;
+        peerConnection = null;
       }
 
-      remoteVideo.srcObject = null;
-      status.innerText = "حالت: ویډیو بنده شوه.";
+      setStatus("ویډیو بنده شوه");
     }
   </script>
 
 </body>
-    </h
+</html>
