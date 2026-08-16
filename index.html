@@ -1,283 +1,58 @@
-<!DOCTYPE html>
-<html lang="ps">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>One Way Video Call</title>
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const path = require("path");
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: white;
-      text-align: center;
-      padding: 20px;
-    }
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
-    h1 {
-      margin-bottom: 10px;
-    }
+app.use(express.static(path.join(__dirname, "public")));
 
-    input {
-      padding: 12px;
-      width: 80%;
-      max-width: 350px;
-      border-radius: 8px;
-      border: none;
-      margin: 8px;
-      font-size: 16px;
-    }
+io.on("connection", (socket) => {
 
-    button {
-      padding: 12px 20px;
-      margin: 6px;
-      border: none;
-      border-radius: 8px;
-      background: #2196f3;
-      color: white;
-      font-size: 16px;
-    }
+  socket.on("join-viewer", () => {
+    socket.join("video-room");
+    socket.to("video-room").emit("viewer-ready");
+  });
 
-    video {
-      width: 100%;
-      max-width: 500px;
-      margin-top: 20px;
-      border-radius: 12px;
-      background: black;
-    }
+  socket.on("join-sharer", () => {
+    socket.join("video-room");
+    socket.to("video-room").emit("sharer-ready");
+  });
 
-    #localVideo {
-      display: none;
-    }
+  socket.on("offer", (offer) => {
+    socket.to("video-room").emit("offer", offer);
+  });
 
-    #status {
-      margin-top: 15px;
-      color: #00e676;
-    }
-  </style>
-</head>
+  socket.on("answer", (answer) => {
+    socket.to("video-room").emit("answer", answer);
+  });
 
-<body>
+  socket.on("ice-candidate", (candidate) => {
+    socket.to("video-room").emit("ice-candidate", candidate);
+  });
 
-  <h1>One Way Video</h1>
+  socket.on("disconnect", () => {
+    socket.to("video-room").emit("peer-disconnected");
+  });
 
-  <input id="room" placeholder="Room ID ولیکه">
+});
 
-  <br>
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-  <button onclick="startSender()">Camera شریکول</button>
-  <button onclick="startViewer()"> ویډیو لیدل</button>
+app.get("/view", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-  <p id="status">Room ID ولیکه</p>
+app.get("/share", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-  <video id="localVideo" autoplay muted playsinline></video>
+const PORT = process.env.PORT || 3000;
 
-  <video id="remoteVideo" autoplay playsinline controls></video>
-
-  <script src="https://video-call-2026-1.onrender.com/socket.io/socket.io.js"></script>
-
-  <script>
-    const socket = io("https://video-call-2026-1.onrender.com");
-
-    let roomId = "";
-    let peerConnection;
-    let localStream;
-
-    const localVideo = document.getElementById("localVideo");
-    const remoteVideo = document.getElementById("remoteVideo");
-    const statusText = document.getElementById("status");
-
-    const configuration = {
-      iceServers: [
-        {
-          urls: "stun:stun.l.google.com:19302"
-        }
-      ]
-    };
-
-    function getRoom() {
-      roomId = document.getElementById("room").value.trim();
-
-      if (!roomId) {
-        alert("لومړی Room ID ولیکه");
-        return false;
-      }
-
-      return true;
-    }
-
-    async function startSender() {
-
-      if (!getRoom()) return;
-
-      statusText.innerText = "Camera او Microphone اجازه وغواړي...";
-
-      try {
-
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-
-        localVideo.srcObject = localStream;
-
-        socket.emit("join-room", roomId);
-
-        statusText.innerText = "Camera فعاله ده، د Viewer انتظار...";
-
-      } catch (error) {
-
-        statusText.innerText =
-          "Camera/Microphone اجازه ورنه کړل شوه.";
-
-        console.error(error);
-      }
-    }
-
-    async function startViewer() {
-
-      if (!getRoom()) return;
-
-      socket.emit("join-room", roomId);
-
-      statusText.innerText =
-        "د بل کس د ویډیو انتظار...";
-
-      /*
-        Viewer خپله Camera یا Microphone نه فعالوي.
-      */
-    }
-
-    socket.on("user-joined", async (userId) => {
-
-      /*
-        هغه کس چې مخکې Room ته داخل شوی وي،
-        Offer جوړوي.
-      */
-
-      if (!localStream) return;
-
-      peerConnection = new RTCPeerConnection(configuration);
-
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-      });
-
-      peerConnection.onicecandidate = event => {
-
-        if (event.candidate) {
-
-          socket.emit("ice-candidate", {
-            room: roomId,
-            candidate: event.candidate
-          });
-
-        }
-      };
-
-      const offer = await peerConnection.createOffer();
-
-      await peerConnection.setLocalDescription(offer);
-
-      socket.emit("offer", {
-        room: roomId,
-        offer: offer
-      });
-
-      statusText.innerText =
-        "د ویډیو اتصال جوړېږي...";
-    });
-
-    socket.on("offer", async (offer) => {
-
-      /*
-        Viewer Offer اخلي او Answer جوړوي.
-      */
-
-      if (localStream) return;
-
-      peerConnection =
-        new RTCPeerConnection(configuration);
-
-      peerConnection.ontrack = event => {
-
-        remoteVideo.srcObject =
-          event.streams[0];
-
-        statusText.innerText =
-          "🎥 Live ویډیو روانه ده";
-      };
-
-      peerConnection.onicecandidate = event => {
-
-        if (event.candidate) {
-
-          socket.emit("ice-candidate", {
-            room: roomId,
-            candidate: event.candidate
-          });
-
-        }
-      };
-
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription(offer)
-      );
-
-      const answer =
-        await peerConnection.createAnswer();
-
-      await peerConnection.setLocalDescription(answer);
-
-      socket.emit("answer", {
-        room: roomId,
-        answer: answer
-      });
-    });
-
-    socket.on("answer", async (answer) => {
-
-      if (!peerConnection) return;
-
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
-
-      statusText.innerText =
-        "🎥 اتصال جوړ شو";
-    });
-
-    socket.on("ice-candidate", async (candidate) => {
-
-      if (!peerConnection) return;
-
-      try {
-
-        await peerConnection.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
-
-      } catch (error) {
-
-        console.error(error);
-      }
-    });
-
-    socket.on("user-left", () => {
-
-      remoteVideo.srcObject = null;
-
-      statusText.innerText =
-        "بل کس له Room څخه ووت.";
-
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-      }
-    });
-
-  </script>
-
-</body>
-</html>
+server.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
