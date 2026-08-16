@@ -3,277 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📹 One Way Video</title>
+
+  <title>Camera</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
       background: #111;
       color: white;
+      font-family: Arial, sans-serif;
       text-align: center;
     }
 
-    .container {
-      width: 100%;
-      max-width: 600px;
-      margin: auto;
-      padding: 20px;
-    }
-
-    h1 {
-      margin-top: 20px;
-      font-size: 28px;
-    }
-
-    .info {
-      color: #bbb;
-      margin-bottom: 20px;
-    }
-
-    input {
-      width: 100%;
-      padding: 14px;
-      border-radius: 10px;
-      border: none;
-      margin-bottom: 12px;
-      font-size: 16px;
-      text-align: center;
-    }
-
-    button {
-      padding: 13px 18px;
-      margin: 5px;
-      border: none;
-      border-radius: 10px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    .join {
-      background: #2196f3;
-      color: white;
-    }
-
-    .watch {
-      background: #4caf50;
-      color: white;
-    }
-
-    .stop {
-      background: #f44336;
-      color: white;
+    h2 {
+      margin-top: 30px;
     }
 
     video {
-      width: 100%;
-      margin-top: 20px;
+      width: 90%;
+      max-width: 500px;
+      height: 300px;
+      object-fit: cover;
+      background: #222;
       border-radius: 15px;
-      background: #000;
-      min-height: 250px;
+      margin-top: 20px;
     }
 
-    #status {
-      margin-top: 20px;
-      padding: 12px;
-      background: #222;
+    button {
+      margin-top: 25px;
+      padding: 15px 30px;
+      border: none;
       border-radius: 10px;
-      color: #00e676;
+      background: #2196f3;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    #stopBtn {
+      background: #e53935;
+      margin-left: 8px;
     }
   </style>
 </head>
 
 <body>
 
-  <div class="container">
+  <h2>📹 زما کمره</h2>
 
-    <h1>📹 One Way Video</h1>
+  <video id="video" autoplay playsinline></video>
 
-    <p class="info">
-      بل کس چې کیمره شریکوي، ویډیو به دلته ښکاره شي.
-    </p>
+  <br>
 
-    <input
-      id="roomId"
-      type="text"
-      placeholder="Room ID ولیکه"
-    >
-
-    <br>
-
-    <button class="join" onclick="joinRoom()">
-      🔗 Room ته ننوتل
-    </button>
-
-    <button class="watch" onclick="startWatching()">
-      👁️ ویډیو لیدل
-    </button>
-
-    <button class="stop" onclick="stopVideo()">
-      ⛔ بندول
-    </button>
-
-    <video id="remoteVideo" autoplay playsinline controls></video>
-
-    <div id="status">
-      حالت: وصل کېدو ته تیار
-    </div>
-
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
+  <button onclick="startCamera()">📷 کمره خلاصول</button>
+  <button id="stopBtn" onclick="stopCamera()">⛔ بندول</button>
 
   <script>
-    const socket = io();
+    const video = document.getElementById("video");
+    let stream = null;
 
-    let roomId = "";
-    let peerConnection = null;
-
-    const remoteVideo = document.getElementById("remoteVideo");
-    const statusText = document.getElementById("status");
-
-    const configuration = {
-      iceServers: [
-        {
-          urls: "stun:stun.l.google.com:19302"
-        }
-      ]
-    };
-
-    function setStatus(text) {
-      statusText.textContent = "حالت: " + text;
-    }
-
-    function joinRoom() {
-      roomId = document.getElementById("roomId").value.trim();
-
-      if (!roomId) {
-        alert("Room ID ولیکه");
-        return;
-      }
-
-      socket.emit("join-room", roomId);
-
-      setStatus("Room ته داخل شو");
-    }
-
-    async function startWatching() {
-      if (!roomId) {
-        alert("لومړی Room ID ولیکه او Room ته داخل شه");
-        return;
-      }
-
-      setStatus("ویډیو ته انتظار...");
-    }
-
-    socket.on("user-joined", async () => {
-      setStatus("بل موبایل وصل شو");
-    });
-
-    socket.on("signal", async ({ from, data }) => {
-      console.log("Signal received", data);
-
-      if (!peerConnection) {
-        createPeerConnection();
-      }
-
-      if (data.type === "offer") {
-        await peerConnection.setRemoteDescription(
-          new RTCSessionDescription(data)
-        );
-
-        const answer = await peerConnection.createAnswer();
-
-        await peerConnection.setLocalDescription(answer);
-
-        socket.emit("signal", {
-          roomId: roomId,
-          data: answer
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
         });
+
+        video.srcObject = stream;
+      } catch (error) {
+        alert("کمرې ته اجازه ورکړه، بیا هڅه وکړه.");
+        console.log(error);
       }
-
-      if (data.type === "answer") {
-        await peerConnection.setRemoteDescription(
-          new RTCSessionDescription(data)
-        );
-      }
-
-      if (data.candidate) {
-        try {
-          await peerConnection.addIceCandidate(
-            new RTCIceCandidate(data.candidate)
-          );
-        } catch (error) {
-          console.log(error);
-        }
-      }
-    });
-
-    function createPeerConnection() {
-
-      peerConnection = new RTCPeerConnection(configuration);
-
-      peerConnection.ontrack = (event) => {
-        remoteVideo.srcObject = event.streams[0];
-        setStatus("ویډیو وصل شوه");
-      };
-
-      peerConnection.onicecandidate = (event) => {
-
-        if (event.candidate) {
-
-          socket.emit("signal", {
-            roomId: roomId,
-            data: {
-              candidate: event.candidate
-            }
-          });
-
-        }
-      };
-
-      peerConnection.onconnectionstatechange = () => {
-
-        console.log(
-          "Connection:",
-          peerConnection.connectionState
-        );
-
-        if (
-          peerConnection.connectionState === "connected"
-        ) {
-          setStatus("وصل شو");
-        }
-
-        if (
-          peerConnection.connectionState === "disconnected"
-        ) {
-          setStatus("اړیکه پرې شوه");
-        }
-      };
     }
 
-    function stopVideo() {
-
-      if (remoteVideo.srcObject) {
-
-        remoteVideo.srcObject
-          .getTracks()
-          .forEach(track => track.stop());
-
-        remoteVideo.srcObject = null;
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+        stream = null;
       }
-
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-      }
-
-      setStatus("ویډیو بنده شوه");
     }
   </script>
 
