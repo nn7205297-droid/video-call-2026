@@ -1,60 +1,55 @@
 const express = require("express");
 const http = require("http");
-const { Server } = require("socket.io");
 const path = require("path");
+const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 
-// index.html د همدې اصلي فولډر څخه وړاندې کوي
+const io = new Server(server, {
+  cors: {
+    origin: "*"
+  }
+});
+
+// index.html د اصلي فولډر څخه ښکاره کوي
+app.use(express.static(__dirname));
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.get("/view", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-app.get("/share", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
 io.on("connection", (socket) => {
-
   console.log("User connected:", socket.id);
 
-  socket.on("join-viewer", () => {
-    socket.join("video-room");
-    socket.to("video-room").emit("viewer-ready");
+  socket.on("join-room", (roomId) => {
+    socket.join(roomId);
+
+    const room = io.sockets.adapter.rooms.get(roomId);
+    const users = room ? room.size : 0;
+
+    socket.emit("room-info", {
+      roomId: roomId,
+      users: users
+    });
+
+    socket.to(roomId).emit("user-joined", socket.id);
   });
 
-  socket.on("join-sharer", () => {
-    socket.join("video-room");
-    socket.to("video-room").emit("sharer-ready");
-  });
-
-  socket.on("offer", (offer) => {
-    socket.to("video-room").emit("offer", offer);
-  });
-
-  socket.on("answer", (answer) => {
-    socket.to("video-room").emit("answer", answer);
-  });
-
-  socket.on("ice-candidate", (candidate) => {
-    socket.to("video-room").emit("ice-candidate", candidate);
+  socket.on("signal", ({ roomId, data }) => {
+    socket.to(roomId).emit("signal", {
+      from: socket.id,
+      data: data
+    });
   });
 
   socket.on("disconnect", () => {
-    socket.to("video-room").emit("peer-disconnected");
     console.log("User disconnected:", socket.id);
   });
-
 });
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
