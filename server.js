@@ -1,55 +1,49 @@
 const express = require("express");
 const http = require("http");
-const path = require("path");
 const { Server } = require("socket.io");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server);
 
-const io = new Server(server, {
-  cors: {
-    origin: "*"
-  }
-});
-
-// index.html د اصلي فولډر څخه ښکاره کوي
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname)));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
 
   socket.on("join-room", (roomId) => {
     socket.join(roomId);
 
-    const room = io.sockets.adapter.rooms.get(roomId);
-    const users = room ? room.size : 0;
+    const users = io.sockets.adapter.rooms.get(roomId);
 
-    socket.emit("room-info", {
-      roomId: roomId,
-      users: users
-    });
-
-    socket.to(roomId).emit("user-joined", socket.id);
+    if (users && users.size > 1) {
+      socket.to(roomId).emit("viewer-ready");
+    }
   });
 
-  socket.on("signal", ({ roomId, data }) => {
-    socket.to(roomId).emit("signal", {
-      from: socket.id,
-      data: data
-    });
+  socket.on("offer", ({ roomId, offer }) => {
+    socket.to(roomId).emit("offer", offer);
+  });
+
+  socket.on("answer", ({ roomId, answer }) => {
+    socket.to(roomId).emit("answer", answer);
+  });
+
+  socket.on("ice-candidate", ({ roomId, candidate }) => {
+    socket.to(roomId).emit("ice-candidate", candidate);
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    socket.broadcast.emit("peer-left");
   });
 });
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
